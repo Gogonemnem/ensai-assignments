@@ -55,20 +55,17 @@ mv users.csv $HOME/neo4j/import/
 mv ratings.csv $HOME/neo4j/import/
 ```
 
-To verify that the files are visible inside the container, we can inspect interactively:
+To verify that the files are visible inside the container, we can inspect the first lines of any file:
 ```bash
-docker exec -it movielens bash
+docker exec movielens head import/movies.csv
 ```
-Inside the container, we can verify the first lines of the `movies.csv` file
-```bash
-head import/movies.csv
-``` 
 
 ### [`neo4j-admin import`](https://neo4j.com/docs/operations-manual/current/tools/neo4j-admin/neo4j-admin-import/)
 
 The command `neo4j-admin import` allows to do batch imports of large amounts of data into a Neo4j database from CSV files. In our case, the complete instruction looks like this: 
 ```bash
-bin/neo4j-admin import \
+docker exec movielens \
+    neo4j-admin import \
     --database=movielens \
     --nodes=Movie=import/movies.csv \
     --nodes=User=import/users.csv \
@@ -79,11 +76,11 @@ bin/neo4j-admin import \
 The community version of Neo4j has some nuances to work with multiple databases. We need to change the default database in the `conf/neo4j.conf` to our recently created database:
 
 ```bash
-sed -i '9s/#dbms.default_database=neo4j/dbms.default_database=movielens/' conf/neo4j.conf
+docker exec movielens sed -i '9s/#dbms.default_database=neo4j/dbms.default_database=movielens/' conf/neo4j.conf
 ```
 
 After restarting the container, we should be able to find our database:
 
 ```bash
-bin/cypher-shell -u neo4j -p test 'SHOW DATABASES'
+docker exec movielens cypher-shell -u neo4j -p test 'SHOW DATABASES'
 ```
