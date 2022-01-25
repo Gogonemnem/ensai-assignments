@@ -15,3 +15,4 @@ docker run \
     neo4j:latest
 ```
 
+Once the instance starts, we can import the [MovieLens dataset](https://grouplens.org/datasets/movielens/) following the instructions at [data](data/README.md).
