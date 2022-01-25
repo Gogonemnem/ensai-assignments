@@ -4,8 +4,7 @@ In this project we costumize a Docker image to create a graph model in [Neo4j](h
 ## Download and prepare the data
 Follow the instructions at [data/README.md](data/README.md) before proceeding with the next step.
 
-## Run Docker image
-Run our costumized image:
+## Build and run Docker image
 ```bash
 docker compose up -d
 ```
