@@ -14,7 +14,6 @@ To proceed with the graph model we require three files:
 - `ratings.csv`
 
 ### `movies.csv`
-
 We can verify the number of lines in the file `movies.csv` with the command
 ```bash
 wc -l movies.csv
@@ -26,7 +25,6 @@ movieId:ID(Movie),title,genres
 ```
 
 ### `users.csv`
-
 The MovieLens dataset does not provide a separate file with the list of users. However, we can obtain this file with the following instructions:
 ```bash
 cat ratings.csv | cut -f1 -d , | uniq > users.csv
@@ -38,49 +36,7 @@ userId:ID(User)
 ```
 
 ### `ratings.csv`
-
 In order to create relationship between two nodes, the `IDs` defined in `movies.csv` and `users.csv` are used for the `:START_ID` and `:END_ID` fields. We establish this relationship in the header of the `ratings.csv` file:
-
 ```
 :START_ID(User),:END_ID(Movie),rating:float,timestamp:int
-```
-
-# Importing the data
-
-We need to move the files into the volume shared with the docker container:
-
-```bash
-mv movies.csv $HOME/neo4j/import/
-mv users.csv $HOME/neo4j/import/
-mv ratings.csv $HOME/neo4j/import/
-```
-
-To verify that the files are visible inside the container, we can inspect the first lines of any file:
-```bash
-docker exec movielens head import/movies.csv
-```
-
-### [`neo4j-admin import`](https://neo4j.com/docs/operations-manual/current/tools/neo4j-admin/neo4j-admin-import/)
-
-The command `neo4j-admin import` allows to do batch imports of large amounts of data into a Neo4j database from CSV files. In our case, the complete instruction looks like this: 
-```bash
-docker exec movielens \
-    neo4j-admin import \
-    --database=movielens \
-    --nodes=Movie=import/movies.csv \
-    --nodes=User=import/users.csv \
-    --relationships=RATE=import/ratings.csv
-```
-
-## Changing default database
-The community version of Neo4j has some nuances to work with multiple databases. We need to change the default database in the `conf/neo4j.conf` to our recently created database:
-
-```bash
-docker exec movielens sed -i '9s/#dbms.default_database=neo4j/dbms.default_database=movielens/' conf/neo4j.conf
-```
-
-After restarting the container, we should be able to find our database:
-
-```bash
-docker exec movielens cypher-shell -u neo4j -p test 'SHOW DATABASES'
 ```

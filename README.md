@@ -1,4 +1,13 @@
-# Neo4j Docker Configuration
+# Importing data
+We can import the [MovieLens dataset](https://grouplens.org/datasets/movielens/) following the instructions at [data](data/README.md).
+
+# Build Docker image
+
+```bash
+docker build -t jruizvar/movielens-neo4j .
+```
+
+# Run Docker image
 
 To run a Neo4j container with the Graph Data Science library as a plugin, you can run
 ```bash
@@ -12,7 +21,5 @@ docker run \
     -v $HOME/neo4j/plugins:/plugins \
     --env NEO4J_AUTH=neo4j/test \
     --env NEO4JLABS_PLUGINS='["graph-data-science"]' \
-    neo4j:latest
+    jruizvar/movielens-neo4j
 ```
-
-Once the instance starts, we can import the [MovieLens dataset](https://grouplens.org/datasets/movielens/) following the instructions at [data](data/README.md).
