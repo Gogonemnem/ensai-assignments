@@ -42,7 +42,7 @@ userId:ID(User)
 In order to create relationship between two nodes, the `IDs` defined in `movies.csv` and `users.csv` are used for the `:START_ID` and `:END_ID` fields. We establish this relationship in the header of the `ratings.csv` file:
 
 ```
-:START_ID,:END_ID,rating:float,timestamp:int
+:START_ID(User),:END_ID(Movie),rating:float,timestamp:int
 ```
 
 # Importing the data
