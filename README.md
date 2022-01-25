@@ -1,25 +1,18 @@
-# Importing data
-We can import the [MovieLens dataset](https://grouplens.org/datasets/movielens/) following the instructions at [data](data/README.md).
+# About
+In this project we costumize a Docker image to create a graph model in [Neo4j](https://neo4j.com) using the [MovieLens dataset](https://grouplens.org/datasets/movielens/).
 
-# Build Docker image
+## Download and prepare the data
+Follow the instructions at [data/README.md](data/README.md) before proceeding with the next step.
 
+## Build Docker image
+Build the costumized image with:
 ```bash
 docker build -t jruizvar/movielens-neo4j .
 ```
 
-# Run Docker image
+## Run Docker image
+To run our costumized image with the Graph Data Science library as a plugin, execute:
 
-To run a Neo4j container with the Graph Data Science library as a plugin, you can run
 ```bash
-docker run \
-    --name movielens \
-    -p7474:7474 -p7687:7687 \
-    -d \
-    -v $HOME/neo4j/data:/data \
-    -v $HOME/neo4j/logs:/logs \
-    -v $HOME/neo4j/import:/var/lib/neo4j/import \
-    -v $HOME/neo4j/plugins:/plugins \
-    --env NEO4J_AUTH=neo4j/test \
-    --env NEO4JLABS_PLUGINS='["graph-data-science"]' \
-    jruizvar/movielens-neo4j
+./run_movilens_neo4j.sh
 ```
