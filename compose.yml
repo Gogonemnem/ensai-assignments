@@ -1,11 +1,10 @@
 services:
   neo4j:
     build: ./
+    env_file:
+      - environment.txt
     ports:
       - 7474:7474
       - 7687:7687
-    environment:
-      - NEO4J_AUTH=neo4j/test
-      - NEO4JLABS_PLUGINS='["graph-data-science"]'
     volumes:
       - ./data:/var/lib/neo4j/import
