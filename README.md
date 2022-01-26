@@ -9,5 +9,12 @@ Follow the instructions at [data](data) before proceeding with the next step.
 docker compose up -d
 ```
 
+## Using constrains 
+You can also specify unique constraints that guarantee uniqueness of a certain property on nodes with a specific label.
+```bash
+docker exec movielens-neo4j-neo4j-1 cypher-shell -u neo4j -p test 'CREATE CONSTRAINT ON (n:User) ASSERT n.userId IS UNIQUE'
+docker exec movielens-neo4j-neo4j-1 cypher-shell -u neo4j -p test 'CREATE CONSTRAINT ON (n:Movie) ASSERT n.movieId IS UNIQUE'
+```
+
 ## [Neo4j Browser](http://localhost:7474)
-Navigate to [localhost:7474](http://localhost:7474) to run queries upon our movielens graph data model.
+Navigate to [localhost:7474](http://localhost:7474) to run queries upon the movielens graph data model.
