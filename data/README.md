@@ -7,7 +7,11 @@ To proceed with the graph model we require three files:
 - `users.csv`
 - `ratings.csv`
 
-The command below downloads and prepares those files: 
+The command below downloads and prepares those files, when running on linux:
 ```bash
-./download_and_prepare_data.sh
+./download_and_prepare_data_linux.sh
+```
+For macOs, use instead: 
+```bash
+./download_and_prepare_data_macos.sh
 ```

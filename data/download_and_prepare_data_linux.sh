@@ -2,14 +2,12 @@
 
 echo 'Download and unzip dataset'
 wget https://files.grouplens.org/datasets/movielens/ml-latest-small.zip
-unzip ml-latest-small.zip \
-    ml-latest-small/movies.csv \
-    ml-latest-small/ratings.csv
+unzip ml-latest-small.zip ml-latest-small/movies.csv ml-latest-small/ratings.csv
 mv ml-latest-small/movies.csv movies.csv
 mv ml-latest-small/ratings.csv ratings.csv
 
 echo 'Creating users.csv'
-cat ratings.csv | cut -f1 -d, | uniq > users.csv
+cat ratings.csv | cut -f1 -d , | uniq > users.csv
 
 echo 'Fixing header of movies.csv'
 sed -i '1s/movieId/movieId:ID(Movie)/' movies.csv
