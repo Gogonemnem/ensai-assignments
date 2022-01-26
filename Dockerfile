@@ -1,4 +1,4 @@
-FROM neo4j:latest
+FROM neo4j:4.4.3-community
 
 WORKDIR /var/lib/neo4j
 
