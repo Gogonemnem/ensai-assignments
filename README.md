@@ -17,4 +17,11 @@ docker exec movielens-neo4j-neo4j-1 cypher-shell -u neo4j -p test 'CREATE CONSTR
 ```
 
 ## [Neo4j Browser](http://localhost:7474)
-Navigate to [localhost:7474](http://localhost:7474) to run queries upon the movielens graph data model.
+Navigate to [localhost:7474](http://localhost:7474) to run queries upon the movielens graph data model. For instance, a list of movies ordered by popularity can be obtained by
+```sql
+MATCH p=()-->(n)
+WITH n.title AS title, count(p) AS popularity
+RETURN title, popularity
+ORDER BY popularity DESC
+LIMIT 10
+```
