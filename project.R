@@ -1,42 +1,39 @@
-if (!require("parallel")) install.packages("parallel")
-if (!require("MASS")) install.packages("MASS")
-if (!require("abind")) install.packages("abind")
-if (!require("fpc")) install.packages("fpc") # Manjaro Distro needs "gcc-fortran"
-# if (!require("cluster")) install.packages("cluster")
-if (!require("flexclust")) install.packages("flexclust")
-if (!require("doParallel")) install.packages("doParallel")
+required_packages <- c("parallel", "MASS", "abind", "fpc", "cluster", "flexclust", "doParallel", "profvis", "dplyr")
+install_missing <- required_packages[!(required_packages %in% installed.packages()[, "Package"])]
+if (length(install_missing) > 0) {
+  install.packages(install_missing)
+}
 
-
+library(flexclust)
 library(parallel)
 library(MASS)
-library(abind)
 library(fpc)
 library(cluster)
-library(flexclust)
 library(doParallel)
+library(dplyr)
+
 
 set.seed(135)
 
-generate_sample <- function(n_clusters, n_samples, mu, sigma) {
-  # sample is of size: samples x ([cluster_id] + covariates)
-  sample <- do.call(
-    rbind,
-    lapply(
-      seq_len(n_clusters),
-      function(i_cluster) {
-        cluster_data <- mvrnorm(
-          n = n_samples, mu[, i_cluster], sigma[, , i_cluster]
-        )
-        cluster_data_with_id <- cbind(i_cluster, cluster_data)
-        return(cluster_data_with_id)
-      }
-    )
-  )
+# Function to generate synthetic data
+generate_sample <- function(distribution_functions, n_samples, seed = 0) {
+  set.seed(seed)
+
+  n_clusters <- length(distribution_functions)
+
+  sample <- lapply(seq_len(n_clusters), function(i_cluster) {
+    cluster_data <- as.data.frame(distribution_functions[[i_cluster]](n_samples))
+    cluster_data <- data.frame(cluster_id = i_cluster, cluster_data)
+    return(cluster_data)
+  }) %>%
+    bind_rows()
+
   return(sample)
 }
 
-
+# Function to run DBSCAN clustering
 dbscan_clusters <- function(data, hyperparameters) {
+  # Unpack hyperparameters with defaults
   p <- ifelse("p" %in% names(hyperparameters), hyperparameters["p"], 2)
   eps <- ifelse("eps" %in% names(hyperparameters), hyperparameters["eps"], 1)
   min_pts <- ifelse("MinPts" %in% names(hyperparameters), hyperparameters["MinPts"], 5)
@@ -46,7 +43,9 @@ dbscan_clusters <- function(data, hyperparameters) {
   return(db$cluster)
 }
 
+# Function to run hierarchical clustering
 hier_clusters <- function(data, hyperparameters) {
+  # Unpack hyperparameters with defaults
   p <- ifelse("p" %in% names(hyperparameters), hyperparameters["p"], 2)
   k <- ifelse("k" %in% names(hyperparameters), hyperparameters["k"], 2)
   method <- ifelse("method" %in% names(hyperparameters), as.character(hyperparameters["method"]), "average")
@@ -56,17 +55,19 @@ hier_clusters <- function(data, hyperparameters) {
   return(cluster)
 }
 
+# Function to run k-centroid clustering 
 k_centroid_clusters <- function(data, hyperparameters) {
+  # Unpack hyperparameters with defaults
   p <- ifelse("p" %in% names(hyperparameters), hyperparameters["p"], 2)
   k <- ifelse("k" %in% names(hyperparameters), hyperparameters["k"], 2)
 
-  dist_func <- function(x, centers) distMinkowski(x, centers, p = p)
-  fam <- kccaFamily(dist = dist_func)
-  kc <- kcca(data, k, family = fam)
+  dist_func <- function(x, centers) flexclust::distMinkowski(x, centers, p = p)
+  fam <- flexclust::kccaFamily(dist = dist_func)
+  kc <- flexclust::kcca(data, k, family = fam)
   return(kc@cluster)
 }
 
-
+# Function to calculate silhouette score
 silhouette_score <- function(distance_matrix, cluster) {
   stats <- cluster.stats(distance_matrix, clustering = cluster, silhouette = TRUE)
   sil_score <- stats$avg.silwidth
@@ -75,8 +76,14 @@ silhouette_score <- function(distance_matrix, cluster) {
 }
 
 
+# Function to evaluate clustering hyperparameters
 hyper_scores <- function(data, hyper_set, method, detect_outliers = TRUE) {
-  results <- apply(hyper_set, 1, function(current_hyperparameters) {    
+  results <- apply(hyper_set, 1, function(current_hyperparameters) {
+    # Unpack hyperparameters
+    p <- ifelse("p" %in% names(hyper_set), hyper_set["p"], 2)
+
+    distance_matrix <- dist(data, method = "minkowski", p = p)
+
     # Perform clustering
     cluster <- method(data, current_hyperparameters)
 
@@ -90,13 +97,12 @@ hyper_scores <- function(data, hyper_set, method, detect_outliers = TRUE) {
       non_zero_cluster_indices <- which(cluster != 0)
       cluster <- cluster[non_zero_cluster_indices]
       filtered_data <- data[non_zero_cluster_indices, ]
-      p <- ifelse("p" %in% names(current_hyperparameters), current_hyperparameters["p"], 2)
-      dist <- dist(filtered_data[, -1], method = "minkowski", p = p)
+      distance_matrix <- dist(filtered_data, method = "minkowski", p = p)
     }
 
     # Ensure there are at least two clusters for silhouette calculation
     if (max(cluster) > 1) {
-      score <- silhouette_score(dist, cluster)
+      score <- silhouette_score(distance_matrix, cluster)
       n_clusters <- max(cluster)
 
       # Return the result for this set of hyperparameters
@@ -114,41 +120,25 @@ hyper_scores <- function(data, hyper_set, method, detect_outliers = TRUE) {
   return(results[!sapply(results, is.null)])
 }
 
+# Function to find the best hyperparameters
 best_hyperparameters <- function(results) {
-  best_result <- NULL
-  best_score <- -Inf
-
-  for (result in results) {
-    if (result$score > best_score) {
-      best_score <- result$score
-      best_result <- result
-    }
-  }
-
+  best_result <- results[which.max(sapply(results, function(result) result$score))]
   return(best_result)
 }
-
-simulate <- function(seed, n_clusters, n_samples, mu, sigma, method, hyper_set) {
-  set.seed(seed)
-  sample <- generate_sample(n_clusters, n_samples, mu, sigma)
-  result <- hyper_scores(data = sample[, -1], hyper_set = hyper_set, method, TRUE)
-  best <- best_hyperparameters(result)
-  return(best$n_clusters)
-}
-
-# Define the range of seed values with the maximum possible integer as the upper bound
-start_seed <- 1
-end_seed <- .Machine$integer.max
 
 n_replications <- 10
 n_samples <- 200
 n_clusters <- 3
-n_covariates <- 3
 
+
+start_seed <- 0
+end_seed <- .Machine$integer.max
+random_seeds <- sample(start_seed:end_seed, n_replications)
+
+# 3 covariates
 mu1 <- c(0, 0, 0)
-mu2 <- c(2, 2, 2)
-mu3 <- c(4, 4, 4)
-mu <- cbind(mu1, mu2, mu3)
+mu2 <- c(4, 2, 4)
+mu3 <- c(4, 8, 8)
 
 sigma1 <- matrix(c(
   1.0, 0.5, 0.3,
@@ -168,58 +158,93 @@ sigma3 <- matrix(c(
   0.0, 0.0, 0.5
 ), nrow = 3, ncol = 3)
 
-# Sigma size: covariates x covariates x clusters
-sigma <- abind(sigma1, sigma2, sigma3, along = 3)
+distr1 <- function(n) mvrnorm(n, mu1, sigma1)
+distr2 <- function(n) mvrnorm(n, mu2, sigma2)
+distr3 <- function(n) mvrnorm(n, mu3, sigma3)
 
+distrs <- list(
+  distr1,
+  distr2,
+  distr3
+)
+
+# Define hyperparameter sets
 dbscan_hyper_set <- expand.grid(
-  p = seq(1, 3),
-  eps = seq(0.5, 5, by = 0.1),
+  # p = seq(1, 3),
+  eps = seq(0.5, 5, by = 0.5),
   MinPts = seq(3, 10)
 )
 
 hier_clust_hyper_set <- expand.grid(
-  p = seq(1, 3),
+  # p = seq(1, 3),
   method = c("average", "complete", "ward.D"),
   k = seq(2, 10)
 )
 
 k_centroid_hyper_set <- expand.grid(
-  p = seq(1, 3),
+  # p = seq(1, 3),
   k = seq(2, 10)
 )
 
-# Generate a vector of random seed values within the specified range
-random_seeds <- sample(start_seed:end_seed, n_replications)
-
+# Define models
 models <- list(
   model1 = list(method = hier_clusters, hyper_set = hier_clust_hyper_set),
   model2 = list(method = dbscan_clusters, hyper_set = dbscan_hyper_set),
   model3 = list(method = k_centroid_clusters, hyper_set = k_centroid_hyper_set)
 )
 
-registerDoParallel(2/3*detectCores())
 
-acc <- foreach(model = models) %dopar% {
-  predicted_clusters <- foreach(seed = random_seeds) %dopar% {
-    n_cl <- simulate(seed, n_clusters, n_samples, mu, sigma, model$method, model$hyper_set)
-    print(n_cl)
-    return(n_cl)
+run <- function() {
+  registerDoParallel(2 / 3 * detectCores())
+
+  p <- foreach(seed = random_seeds, .combine = "cbind") %dopar% {
+    sample <- generate_sample(distrs, 100, seed)
+
+    pred <- foreach(model = models, .combine = "c") %do% {
+      model_scores <- hyper_scores(data = sample[, -1], hyper_set = model$hyper_set, model$method, TRUE)
+      best <- best_hyperparameters(model_scores)
+      return(best$n_clusters)
+    }
+
+    return(pred)
   }
-  accuracy <- mean(predicted_clusters == n_clusters)
-  return(accuracy)
+
+  stopImplicitCluster()
+
+  acc <- rowSums(p == n_clusters) / ncol(p)
+  return(acc)
 }
 
-stopImplicitCluster()
+# Run the code to be profiled
+run_profiler <- function() {
+  p <- sapply(random_seeds, function(seed) {
+    sample <- generate_sample(distrs, 100, seed)
+    
+    pred <- sapply(models, function(model) {
+      model_scores <- hyper_scores(data = sample[, -1], hyper_set = model$hyper_set, model$method, TRUE)
+      best <- best_hyperparameters(model_scores)
+      return(best$n_clusters)
+    })
+    
+    return(pred)
+  })
+  acc <- rowSums(p == n_clusters) / ncol(p)
+  return(acc)
+}
 
-# # Example usage:
 
-method <- hier_clusters
+# Profile the code
+Rprof()
+run_profiler()
+Rprof(NULL)
+summaryRprof()
 
-example_sample <- generate_sample(n_clusters, n_samples, mu, sigma)
-result <- hyper_scores(data = example_sample, hyper_set = hier_clust_hyper_set, method, TRUE)
+
+# Example single model usage
+method <- k_centroid_clusters
+example_sample <- generate_sample(distrs, n_samples, 0)
+result <- hyper_scores(data = example_sample[, -1], hyper_set = k_centroid_hyper_set, method, TRUE)
 best <- best_hyperparameters(result)
-best
 
-clusters <- method(example_sample[, -1], result$best_hyperparameters)
-example_sample[, 1]
+clusters <- method(example_sample[, -1], best$hyperparameters)
 clusters
