@@ -97,7 +97,7 @@ best_hyperparameters <- function(results_df) {
 }
 
 set.seed(2023)
-n_replications <- 500
+n_replications <- 5
 n_samples <- 100
 n_clusters <- 3
 
@@ -208,10 +208,10 @@ run_serialized <- function(distrs, n_samples, seeds, models) {
   return(acc)
 }
 
-# prof <- profvis({
-#   run_serialized()
-# })
-# print(prof)
+prof <- profvis({
+  run_serialized(distrs, n_samples, random_seeds, models)
+})
+print(prof)
 
 results <- run_model(distrs, n_samples, random_seeds, models)
 
@@ -231,10 +231,10 @@ best
 
 # webshot::install_phantomjs()
 
-# # Save the profvis output to an HTML file]
-# htmlwidgets::saveWidget(prof, "profile.html", selfcontained = FALSE)
-# # Capture the HTML file as an image
-# webshot::webshot("profile.html", "profile.png", delay = 5)
+# Save the profvis output to an HTML file]
+htmlwidgets::saveWidget(prof, "profile.html", selfcontained = FALSE)
+# Capture the HTML file as an image
+webshot::webshot("profile.html", "profile.png", delay = 5)
 
 
 # -----------------------
