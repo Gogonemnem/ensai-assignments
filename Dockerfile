@@ -7,6 +7,7 @@ COPY data/movies.csv data/users.csv data/ratings.csv ./import/
 RUN mkdir scripts
 COPY create_genre_nodes.cypher ./scripts
 COPY split_train_test.cypher ./scripts
+COPY compute_biases.cypher ./scripts
 COPY init-neo4j.sh ./scripts
 
 # Import data and create genre nodes and relationships
