@@ -1,4 +1,4 @@
-FROM neo4j:4.4.3-community
+FROM neo4j:4.4.11-community
 
 WORKDIR /var/lib/neo4j
 
@@ -10,6 +10,9 @@ COPY split_train_test.cypher ./scripts
 COPY compute_biases.cypher ./scripts
 COPY init-neo4j.sh ./scripts
 
+# # Set the entrypoint to the init script
+# ENTRYPOINT ["scripts/init-neo4j.sh"]
+
 # Import data and create genre nodes and relationships
 RUN neo4j-admin import \
     --database=movielens \
@@ -17,7 +20,3 @@ RUN neo4j-admin import \
     --nodes=User=import/users.csv \
     --relationships=RATE=import/ratings.csv
 RUN sed -i '9s/#dbms.default_database=neo4j/dbms.default_database=movielens/' conf/neo4j.conf
-
-
-# Start Neo4j (it will use the modified neo4j.conf)
-CMD ["neo4j"]

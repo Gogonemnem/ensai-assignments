@@ -8,4 +8,4 @@ services:
       - 7687:7687
     volumes:
       - ./data:/var/lib/neo4j/import
-    command: ./scripts/init-neo4j.sh
+    # command: ./scripts/init-neo4j.sh
