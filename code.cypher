@@ -42,7 +42,7 @@ RETURN
 
 // 2. Compute and store filtered node similarity
 CALL apoc.periodic.iterate(
-  "CALL gds.alpha.nodeSimilarity.filtered.stream('mySubgraph', {sourceNodeFilter:'User', targetNodeFilter:'User', topK:10}) YIELD node1, node2, similarity RETURN node1, node2, similarity",
+  "CALL gds.nodeSimilarity.filtered.stream('mySubgraph', {sourceNodeFilter:'User', targetNodeFilter:'User', topK:10}) YIELD node1, node2, similarity RETURN node1, node2, similarity",
   "WITH gds.util.asNode(node1) AS sourceNode, gds.util.asNode(node2) AS targetNode, similarity CREATE (sourceNode)-[:SIMILAR {score: similarity}]->(targetNode)",
   {batchSize:10000, parallel:true}
 )  YIELD batches, total RETURN batches, total;
