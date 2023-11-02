@@ -1,4 +1,4 @@
-FROM neo4j:4.4.11-community
+FROM neo4j:4.4.26-community
 
 WORKDIR /var/lib/neo4j
 
