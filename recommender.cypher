@@ -42,7 +42,7 @@ RETURN
 
 // 2. Compute and store filtered node similarity
 CALL apoc.periodic.iterate(
-  "CALL gds.nodeSimilarity.filtered.stream('mySubgraph', {sourceNodeFilter:'User', targetNodeFilter:'User', topK:10}) YIELD node1, node2, similarity RETURN node1, node2, similarity",
+  "CALL gds.nodeSimilarity.filtered.stream('mySubgraph', {sourceNodeFilter:'User', targetNodeFilter:'User', topK:10, similarityMetric: 'COSINE'}) YIELD node1, node2, similarity RETURN node1, node2, similarity",
   "WITH gds.util.asNode(node1) AS sourceNode, gds.util.asNode(node2) AS targetNode, similarity CREATE (sourceNode)-[:SIMILAR {score: similarity}]->(targetNode)",
   {batchSize:10000, parallel:true}
 )  YIELD batches, total RETURN batches, total;
@@ -68,10 +68,10 @@ CALL apoc.periodic.iterate(
 
     WITH u, mu, SUM(sim.score * (r.rating - u2.bias - targetMovie.bias - mu)) AS numerator, SUM(sim.score) AS denominator, actualRating, targetMovie
     WHERE denominator <> 0
-    WITH mu + u.bias + targetMovie.bias + numerator / denominator AS predictedRating, actualRating
+    WITH mu + u.bias + targetMovie.bias + numerator / denominator AS predictedRating, actualRating, mu + u.bias + targetMovie.bias AS allBias, u, targetMovie as m
 
 
-    CREATE (i:Intermediate {predictedRating: predictedRating, actualRating: actualRating})
+    CREATE (i:Intermediate {predictedRating: predictedRating, actualRating: actualRating, allBias: allBias, mBias: m.bias, uBias: u.bias, mu: mu})
     RETURN i',
     { batchSize: 16, parallel: false }
 ) YIELD batches, total
