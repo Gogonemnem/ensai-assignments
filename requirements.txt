@@ -1,0 +1,7 @@
+pyspark
+folium
+seaborn
+matplotlib
+geopandas
+ipywidgets
+ipython
