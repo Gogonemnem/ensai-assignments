@@ -1,0 +1,8 @@
+pandas
+seaborn
+statsmodels
+scipy
+scikit-learn
+scikit-learn-extra
+tqdm
+rpy2
