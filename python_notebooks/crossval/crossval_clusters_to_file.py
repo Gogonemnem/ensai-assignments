@@ -13,6 +13,7 @@ from utils import cluster_convert
 import seaborn as sns
 from sklearn.model_selection import KFold, TimeSeriesSplit
 from joblib import Parallel, delayed
+from itertools import product
 import json
 import os
 os.environ['R_HOME'] = '/usr/lib/R'
@@ -81,7 +82,6 @@ with open("../../out/clustering_results.json", "r") as f:
     clustering_results = json.load(f)
 
 clustering_results = pd.DataFrame(clustering_results)
-clustering_results
 
 # %%
 CLUSTER_TYPE = "gcc" # acf | cc | gcc
@@ -105,7 +105,7 @@ assert len(cluster) == len(df_train.columns), "Cluster length does not match num
 # %%
 model = SparseVAR(lookback = 1, horizon = 1)
 
-N_SPLITS = 5
+N_SPLITS = 3
 cv = TimeSeriesSplit(N_SPLITS, test_size = (len(df) - 5) // 10)
 
 grid = {
