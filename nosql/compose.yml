@@ -1,0 +1,11 @@
+services:
+  neo4j:
+    build: ./
+    env_file:
+      - environment.txt
+    ports:
+      - 7474:7474
+      - 7687:7687
+    volumes:
+      - ./data:/var/lib/neo4j/import
+    # command: ./scripts/init-neo4j.sh
