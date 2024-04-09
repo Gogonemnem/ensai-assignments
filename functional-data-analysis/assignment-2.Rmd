@@ -1,0 +1,318 @@
+---
+title: "Functional Data Analysis - Testing the Mean Function"
+author: "Gonem Lau"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output: html_document
+---
+
+# Introduction
+
+This report explores the hypothesis testing of the mean function in functional data analysis. Data are modeled after a Brownian motion process, with various statistical techniques applied to assess the characteristics of the mean function.
+
+# Setup and Initialization
+Define constants for the analysis
+
+```{r setup-constants}
+R_REPLICATIONS <- 200
+N_SAMPLES <- 100
+K_DESIGN_POINTS <- 20
+J_BASES <- 100
+L_TIMES <- 250
+MC_SAMPLES <- 500
+J_TRUNCATED_BASES <- 50
+NOISE <- 0.5
+set.seed(2023)
+```
+
+# Utility and Mathematical Functions
+
+Defining utility functions for generating Brownian motion eigenvalues, eigenfunctions, and mean functions.
+
+```{r utility-functions}
+# Mean functions
+zero_mean_fn <- function(time) {
+  0
+}
+sinusoidal_mean_fn <- function(time, amplitude = 1, frequency = 1, phase = 0) {
+  amplitude * sin(2 * pi * frequency * time + phase)
+}
+
+# Error function
+error_functions <- function(sigma, noise_distribution) {
+  switch(noise_distribution,
+    "normal" = function(time) rnorm(1, mean = 0, sd = sigma),
+    "t-distribution" = function(time) rt(1, df = 8) * sigma
+  )
+}
+
+# Eigenvalue and eigenfunction calculations for Brownian motion
+eigen_value_bm <- function(index) {
+  1 / (pi^2 * (index - 0.5)^2)
+}
+eigen_values_bm <- function(num_bases) {
+  sapply(seq_len(num_bases), eigen_value_bm)
+}
+eigen_function_bm <- function(index) {
+  function(time) {
+    sqrt(2) * sin(pi * (index - 0.5) * time)
+  }
+}
+eigen_functions_bm <- function(num_bases) {
+  lapply(seq_len(num_bases), eigen_function_bm)
+}
+```
+
+# Data Generation
+
+Simulating design points and generating functional data with noise.
+
+```{r data-generation}
+library(MASS)
+
+# Function to generate design points
+generate_single_design_points <- function(num_times, design_distribution = "uniform") {
+  if (design_distribution == "poisson") {
+    sort(runif(rpois(1, lambda = num_times), 0, 1))
+  } else {
+    sort(runif(num_times, 0, 1))
+  }
+}
+
+# Function to generate scores based on eigenvalues
+score_generator <- function(num_samples, eigen_values) {
+  num_bases <- length(eigen_values)
+  cov <- diag(eigen_values)
+  MASS::mvrnorm(n = num_samples, mu = rep(0, num_bases), Sigma = cov)
+}
+
+# Function for observation generation
+generate_observations <- function(observation_functions, num_times, design_distribution) {
+  lapply(observation_functions, function(f) {
+    design_points <- generate_single_design_points(num_times, design_distribution)
+    observations <- sapply(design_points, f)
+    list(observations = observations, design_points = design_points)
+  })
+}
+```
+
+# Function Estimation
+
+Estimating the functions from our observations using two approaches: linear interpolation and Nadaraya-Watson smoothing.
+
+```{r function-estimation}
+# Function generator
+function_generator_bm <- function(mean_fn, scores, eigen_fns) {
+  apply(scores, 1, function(score_row) {
+    function(time) {
+      specific <- sum(mapply(FUN = function(eigen_fn, score) eigen_fn(time) * score, eigen_fns, score_row))
+      common <- mean_fn(time)
+      return(common + specific)
+    }
+  })
+}
+
+# Empirical mean function
+empirical_mean_function <- function(functions) {
+  function(time) {
+    values_at_time <- sapply(functions, function(f) f(time))
+    mean(values_at_time)
+  }
+}
+
+# Observation function generator
+observation_function_generator <- function(functions, error_fn) {
+  lapply(functions, function(f) {
+    function(time) {
+      function_value <- f(time)
+      error <- error_fn(time)
+      function_value + error
+    }
+  })
+}
+
+# Estimators for interpolated and smoothed functions
+estimate_interpolated_functions <- function(observations_with_design_points) {
+  lapply(observations_with_design_points, function(data) {
+    approxfun(data$design_points, data$observations, method = "linear", rule = 2)
+  })
+}
+
+estimate_smoothed_functions <- function(observations_with_design_points, bandwidth, kernel) {
+  lapply(observations_with_design_points, function(data) {
+    function(time) {
+      distances <- (time - data$design_points) / bandwidth
+      weights <- kernel(distances)
+      sum(weights * data$observations) / sum(weights)
+    }
+  })
+}
+```
+
+# Statistical Testing
+
+Performing statistical testing to assess the behavior of the test statistic under the null hypothesis.
+
+```{r statistical-testing}
+# Monte Carlo norm approximation
+mc_norm <- function(mc_samples, empirical_mean_fn, mean_fn) {
+  sampled_norms <- sapply(mc_samples, function(time) {
+    (empirical_mean_fn(time) - mean_fn(time))^2
+  })
+  mean(sampled_norms)
+}
+
+# Test norm calculation
+test_norm <- function(num_functions, mc_samples, empirical_mean_fn, mean_fn) {
+  num_functions * mc_norm(mc_samples, empirical_mean_fn, mean_fn)
+}
+
+# Null hypothesis mean realization
+mean_null_realization <- function(eigen_values) {
+  random_variables <- rchisq(length(eigen_values), df = 1)
+  sum(eigen_values * random_variables)
+}
+
+# Monte Carlo quantiles calculation
+mc_quantiles <- function(mc_samples, eigen_values, probabilities) {
+  simulated_sums <- replicate(mc_samples, mean_null_realization(eigen_values))
+  quantile(simulated_sums, probabilities)
+}
+
+# Gaussian Nadaraya-Watson kernel
+gaussianNW <- function(obs) estimate_smoothed_functions(obs, 0.1, dnorm)
+```
+
+
+# Sampling and Replication Functions
+
+The following functions are used for sampling time points and replicating the test norm across multiple samples. This is crucial for assessing the behavior of our test statistic under various conditions.
+
+```{r sampling-replication-functions}
+# Sampling random times uniformly within a specified range
+sample_times <- function(n_samples, min_time, max_time) {
+  random_samples <- runif(n_samples, min = min_time, max = max_time)
+  sort(random_samples)
+}
+
+# Generating a grid of times
+grid_times <- function(n_samples, min_time, max_time) {
+  seq(min_time, max_time, length.out = n_samples)
+}
+
+# Replicating the test norm for each sample
+replicate_test_norm <- function(num_points, num_times, time_sampler, num_samples, eigen_values, eigen_functions, function_estimator, mean_fn, error_fn, design_distribution, test_mean_fn = NULL) {
+  if (is.null(test_mean_fn)) {
+    test_mean_fn <- mean_fn
+  }
+
+  scores <- score_generator(num_samples, eigen_values)
+  functions <- function_generator_bm(mean_fn, scores, eigen_functions)
+  observation_functions <- observation_function_generator(functions, error_fn)
+
+  observations <- generate_observations(observation_functions, num_points, design_distribution)
+  estimated_functions <- function_estimator(observations)
+
+  empirical_mean_fn <- empirical_mean_function(estimated_functions)
+  sampled_times <- time_sampler(num_times, 0, 1)
+
+  test_norm(num_samples, sampled_times, empirical_mean_fn, test_mean_fn)
+}
+```
+
+# Analysis Execution and Results
+
+This section focuses on executing the functional data analysis with a variety of scenarios to test the mean function. These scenarios encompass variations in noise levels, design point distributions, and error distributions. Each scenario is simulated using the Brownian motion model with different parameters to explore how these factors affect the results of hypothesis testing on the mean function. The simulations involve linear interpolation and Nadaraya-Watson smoothing to estimate functions from noisy observations. The outcomes provide insights into the impact of these variations on the statistical properties of the test for the mean function.
+
+
+```{r run-simulations}
+library(parallel)
+run_simulation <- function(k_design_points, noise, design_distribution, mean_function, noise_distribution, num_cores) {
+  # Brownian Motion simulation setup
+  eigen_values <- eigen_values_bm(J_BASES)
+  eigen_functions <- eigen_functions_bm(J_BASES)
+
+  # Calculating theoretical quantiles
+  probs_seq <- seq(0, 1, by = 0.01)
+  truncated_eigen_values <- eigen_values[seq_len(J_TRUNCATED_BASES)]
+  quantiles <- mc_quantiles(MC_SAMPLES, truncated_eigen_values, probs_seq)
+
+  error_function <- error_functions(noise, noise_distribution)
+
+  # Running tests in parallel
+  parallel_results <- mclapply(c("zero_linear", "zero_smoothed", "mean_linear", "mean_smoothed"), function(test_type) {
+    estimator <- ifelse(grepl("linear", test_type), estimate_interpolated_functions, gaussianNW)
+    mean_fn <- ifelse(grepl("zero", test_type), zero_mean_fn, mean_function)
+
+    mclapply(seq_len(R_REPLICATIONS), function(i) replicate_test_norm(k_design_points, L_TIMES, grid_times, N_SAMPLES, eigen_values, eigen_functions, estimator, mean_fn, error_function, design_distribution), mc.cores = num_cores)
+  }, mc.cores = num_cores, mc.preschedule = FALSE)
+
+  # Extracting results
+  results <- setNames(lapply(parallel_results, function(result) sapply(quantiles, function(q) mean(unlist(result) <= q))), c("zero_linear_results", "zero_smoothed_results", "mean_linear_results", "mean_smoothed_results"))
+
+  return(results)
+}
+```
+
+
+```{r analysis-execution}
+library(ggplot2)
+# Parallel processing setup
+num_cores <- parallel::detectCores() * 2 / 3
+simulations <- list(
+  base_case = run_simulation(K_DESIGN_POINTS, NOISE, "poisson", sinusoidal_mean_fn, "normal", num_cores),
+  increased_K = run_simulation(100, NOISE, "poisson", sinusoidal_mean_fn, "normal", num_cores),
+  reduced_noise = run_simulation(K_DESIGN_POINTS, 0.1, "poisson", sinusoidal_mean_fn, "normal", num_cores),
+  increased_noise = run_simulation(K_DESIGN_POINTS, 1, "poisson", sinusoidal_mean_fn, "normal", num_cores),
+  fixed_design = run_simulation(K_DESIGN_POINTS, NOISE, "uniform", sinusoidal_mean_fn, "normal", num_cores),
+  studentT_noise = run_simulation(K_DESIGN_POINTS, NOISE, "poisson", sinusoidal_mean_fn, "t-distribution", num_cores)
+)
+
+# Function to convert simulation results to a data frame for plotting
+convert_to_df <- function(simulation_results, scenario_name, result_type) {
+  df <- data.frame(
+    Quantile = seq(0, 1, by = 0.01),
+    Value = simulation_results,
+    Scenario = scenario_name,
+    ResultType = result_type
+  )
+  return(df)
+}
+
+# Convert each result type for each scenario to a data frame
+df_list <- lapply(names(simulations), function(scenario) {
+  lapply(names(simulations[[scenario]]), function(result_type) {
+    convert_to_df(simulations[[scenario]][[result_type]], scenario, result_type)
+  })
+})
+
+# Combine all data frames
+combined_df <- do.call(rbind, unlist(df_list, recursive = FALSE))
+
+# Plot the empirical quantiles for each scenario and result type, using facets for each result type
+ggplot(combined_df, aes(x = Quantile, y = Value, color = Scenario)) +
+  geom_line(linewidth = 1.2) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") + # Adds a reference line
+  facet_wrap(~ResultType, scales = "free_y") +
+  labs(
+    title = "Empirical Quantile Comparison Across Scenarios and Result Types",
+    x = "Quantile", y = "Value"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    legend.box = "vertical",
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 10),
+    plot.title = element_text(hjust = 0.5, size = 14),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.title = element_text(size = 12),
+    strip.text.x = element_text(size = 12)
+  ) +
+  scale_x_continuous(breaks = seq(0, 1, by = 0.1)) +
+  scale_y_continuous(limits = c(0, NA)) +
+  scale_color_brewer(palette = "Set1") +
+  guides(col = guide_legend(nrow = 1, override.aes = list(size = 4)))
+```
+
+# Conclusion
+The analysis of empirical quantiles suggests that the test statistic is not very sensitive to the distribution types of noise. This is evident from the similar results obtained with normal and Student's t-distribution noise. However, the reliability of the test is affected by noise, especially when non-zero mean functions are present. In such cases, deviations from the expected behavior are more pronounced. The use of smoothing techniques has a dual effect. While it exacerbates deviations for non-zero means, it enhances reliability for null means. Increasing the number of design points results in better alignment with theoretical expectations, emphasizing the importance of rich data. On the other hand, more noise leads to greater dispersion of results, highlighting the vulnerability of the test to data variability. The choice between uniform and Poisson design point distributions has a negligible impact on the outcomes, indicating the robustness of the test to different design point generation methods.
